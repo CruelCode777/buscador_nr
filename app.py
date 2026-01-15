@@ -89,8 +89,4 @@ with streamlit_analytics2.track():
                 except Exception as e:
                     st.error(f"Erro: {e}")
 
-    # --- ÁREA ADMINISTRATIVA ---
-    st.write("---")
-    # Aqui chamamos a função view() da biblioteca 2 explicitamente
-    streamlit_analytics2.view(password="carlos1308@")
 
