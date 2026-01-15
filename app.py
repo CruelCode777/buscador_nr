@@ -7,7 +7,7 @@ from langchain_pinecone import PineconeVectorStore
 from langchain_core.prompts import ChatPromptTemplate
 
 # --- CONFIGURAÇÃO DA PÁGINA ---
-st.set_page_config(page_title="IA de Segurança do Trabalho", page_icon="👷", layout="centered")
+st.set_page_config(page_title="Consultor SST", page_icon="👷", layout="centered")
 
 # --- RASTREAMENTO (Usando a biblioteca 2 explícita) ---
 with streamlit_analytics2.track():
@@ -20,7 +20,7 @@ with streamlit_analytics2.track():
         st.warning("Segredos não configurados corretamente.")
         st.stop()
 
-    st.title("👷 Consultor de NRs (IA)")
+    st.title("👷 Consultor de NRs")
     st.caption("Base de conhecimento unificada de todas as Normas Regulamentadoras.")
 
     # --- CONEXÃO COM A BASE DE DADOS (PINECONE) ---
@@ -88,5 +88,6 @@ with streamlit_analytics2.track():
                 
                 except Exception as e:
                     st.error(f"Erro: {e}")
+
 
 
