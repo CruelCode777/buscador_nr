@@ -6,7 +6,7 @@ from langchain_pinecone import PineconeVectorStore
 from pinecone import Pinecone
 
 # --- CONFIGURAÇÃO ---
-PINECONE_API_KEY = "sua_chave_do_pinecone_aqui"
+PINECONE_API_KEY = "pcsk_3yDmdF_KDGdqaSpynmKQtARBS3Y428FqCteuvxnkHE4gcsEvkRWSmwjA7HbbaTPY8YUMUT"
 INDEX_NAME = "base-nrs"
 
 # Inicializa Pinecone
@@ -52,3 +52,4 @@ def carregar_tudo():
 if __name__ == "__main__":
 
     carregar_tudo()
+
