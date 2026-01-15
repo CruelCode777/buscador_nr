@@ -96,7 +96,7 @@ if prompt := st.chat_input("Ex: Quais os exames obrigatórios para trabalho em a
                     # 3. Chama o Google Gemini
                     # MUDANÇA AQUI: Usando 'gemini-1.5-flash-latest' ou 'gemini-pro'
                     llm = ChatGoogleGenerativeAI(
-                        model="gemini-1.5-flash-latest", # Tenta a versão mais recente do Flash
+                        model="gemini-pro", # Tenta a versão mais recente do Flash
                         temperature=0.1,
                         google_api_key=google_key
                     )
@@ -113,3 +113,4 @@ if prompt := st.chat_input("Ex: Quais os exames obrigatórios para trabalho em a
                 # Se der erro de novo, ele avisa qual foi
                 st.error(f"Erro na IA: {e}")
                 st.info("Dica: Se o erro persistir, troque o modelo no código para 'gemini-pro'.")
+
