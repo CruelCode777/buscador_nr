@@ -1,5 +1,5 @@
 streamlit
-streamlit-analytics
+streamlit-analytics2
 langchain-groq
 langchain-community
 langchain-huggingface
