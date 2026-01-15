@@ -73,9 +73,9 @@ if prompt := st.chat_input("Ex: Quais os exames obrigatórios para trabalho em a
 
                     # 2. O Prompt
                     system_prompt = """
-                    Você é um Consultor Sênior em Segurança do Trabalho (HSE).
+                    Você é um Consultor Sênior ESPECIALISTA em Segurança do Trabalho (HSE).
                     Sua missão é orientar profissionais com base estrita nas Normas Regulamentadoras (NRs).
-                    Seja detalhista nas respostas, sempre mantendo rigor técnico.
+                    Seja detalhista nas respostas, sempre mantendo rigor técnico. Busque ser o mais assertivo e técnico possivel, para evitar duvidas ao usuário.
                     
                     Diretrizes:
                     1. Use tópicos para listas.
@@ -103,6 +103,7 @@ if prompt := st.chat_input("Ex: Quais os exames obrigatórios para trabalho em a
             
             except Exception as e:
                 st.error(f"Ocorreu um erro durante a resposta: {e}")
+
 
 
 
