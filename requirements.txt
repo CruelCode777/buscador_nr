@@ -1,9 +1,10 @@
 streamlit
 google-generativeai
 langchain-google-genai
-langchain-community
+langchain-community>=0.2.10
+langchain-core>=0.2.20
 langchain-huggingface
-langchain-pinecone
-pinecone>=3.0.0
+langchain-pinecone>=0.1.1
+pinecone>=4.0.0
 sentence-transformers
 python-dotenv
