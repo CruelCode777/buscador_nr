@@ -1,120 +1,91 @@
-# --- FIX PARA O STREAMLIT CLOUD ---
-try:
-    __import__('pysqlite3')
-    import sys
-    sys.modules['sqlite3'] = sys.modules.pop('pysqlite3')
-except ImportError:
-    pass
-# ----------------------------------
-
 import streamlit as st
-import os
-import tempfile
 from langchain_groq import ChatGroq
-from langchain_community.embeddings.fastembed import FastEmbedEmbeddings
-from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_community.vectorstores import Chroma
-from langchain_community.document_loaders import PyPDFLoader
+from langchain_huggingface import HuggingFaceEmbeddings
+from langchain_pinecone import PineconeVectorStore
 from langchain_core.prompts import ChatPromptTemplate
 
-# --- CONFIGURAÇÃO DA PÁGINA ---
-st.set_page_config(page_title="Assistente NR", page_icon="🦺")
+# Configuração da Página
+st.set_page_config(page_title="IA de Segurança do Trabalho", page_icon="👷", layout="centered")
 
-st.title("🦺 Assistente de NRs (Versão Estável)")
-st.caption("Rodando com FastEmbed + Groq (Llama 3.3).")
+# --- SEGREDOS ---
+# Configure no Streamlit Cloud: GROQ_API_KEY e PINECONE_API_KEY
+groq_key = st.secrets["GROQ_API_KEY"]
+pinecone_key = st.secrets["PINECONE_API_KEY"]
 
-# --- BARRA LATERAL ---
-with st.sidebar:
-    st.header("Configurações")
-    uploaded_file = st.file_uploader("Envie o PDF da NR", type="pdf")
-    
-    api_key = st.secrets.get("GROQ_API_KEY")
-    if not api_key:
-        api_key = st.text_input("Chave API Groq:", type="password")
+st.title("👷 Consultor de NRs (IA)")
+st.caption("Base de conhecimento unificada de todas as Normas Regulamentadoras.")
 
-# --- PROCESSAMENTO ---
+# --- CONEXÃO COM A BASE DE DADOS (PINECONE) ---
 @st.cache_resource
-def get_vectorstore(file_path):
-    loader = PyPDFLoader(file_path)
-    docs = loader.load()
+def get_knowledge_base():
+    embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
     
-    if not docs:
-        st.error("Não foi possível ler o texto do PDF. Verifique se não é uma imagem escaneada.")
-        return None
-
-    text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
-    splits = text_splitter.split_documents(docs)
-    
-    # FastEmbed (Leve e rápido)
-    embeddings = FastEmbedEmbeddings(model_name="sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
-    
-    vectorstore = Chroma.from_documents(documents=splits, embedding=embeddings)
+    # Conecta ao índice que você criou e já populou
+    vectorstore = PineconeVectorStore.from_existing_index(
+        index_name="base-nrs",
+        embedding=embeddings,
+        pinecone_api_key=pinecone_key
+    )
     return vectorstore
 
-# --- LÓGICA DO APP ---
-if uploaded_file and api_key:
-    # Salva arquivo temporário
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_file:
-        tmp_file.write(uploaded_file.read())
-        tmp_path = tmp_file.name
+vectorstore = get_knowledge_base()
 
-    try:
-        # Só processa se houver mudança de arquivo
-        if "processed_file" not in st.session_state or st.session_state.processed_file != uploaded_file.name:
-            with st.spinner("Processando norma..."):
-                vectorstore = get_vectorstore(tmp_path)
-                if vectorstore:
-                    st.session_state.vectorstore = vectorstore
-                    st.session_state.processed_file = uploaded_file.name
-                    st.success("Norma carregada!")
-                else:
-                    st.stop() # Para a execução se o PDF for inválido
+# --- CHAT ---
+if "messages" not in st.session_state:
+    st.session_state.messages = []
 
-        # Chat
-        question = st.chat_input("Pergunte sobre a norma...")
-        
-        if question:
-            st.chat_message("user").write(question)
+# Mostra histórico
+for message in st.session_state.messages:
+    with st.chat_message(message["role"]):
+        st.markdown(message["content"])
+
+# Campo de pergunta
+if prompt := st.chat_input("Ex: Quais os exames obrigatórios para trabalho em altura?"):
+    st.session_state.messages.append({"role": "user", "content": prompt})
+    with st.chat_message("user"):
+        st.markdown(prompt)
+
+    with st.chat_message("assistant"):
+        with st.spinner("Consultando a base unificada de normas..."):
             
-            with st.chat_message("assistant"):
-                with st.spinner("Pensando..."):
-                    try:
-                        # ATUALIZAÇÃO IMPORTANTE: Trocamos o modelo para o Llama 3.3 (Mais novo e estável)
-                        llm = ChatGroq(
-                            temperature=0, 
-                            model_name="llama-3.3-70b-versatile", 
-                            groq_api_key=api_key
-                        )
-                        
-                        retriever = st.session_state.vectorstore.as_retriever()
-                        docs = retriever.invoke(question)
-                        
-                        # Proteção contra contexto vazio
-                        if not docs:
-                            st.warning("Não encontrei informações relevantes nesse documento para sua pergunta.")
-                            st.stop()
+            # 1. Busca os trechos mais relevantes no Pinecone
+            retriever = vectorstore.as_retriever(search_kwargs={"k": 4}) # Traz 4 trechos
+            docs = retriever.invoke(prompt)
+            
+            # Formata o contexto
+            context_text = ""
+            sources = set()
+            for doc in docs:
+                context_text += f"{doc.page_content}\n---\n"
+                sources.add(doc.metadata['source']) # Pega o nome do arquivo original
 
-                        context = "\n\n".join([d.page_content for d in docs])
-                        
-                        prompt = ChatPromptTemplate.from_template("""
-                        Você é um Especialista em Segurança do Trabalho.
-                        Responda com base no contexto abaixo.
-                        
-                        Contexto: {context}
-                        Pergunta: {question}
-                        """)
-                        
-                        chain = prompt | llm
-                        res = chain.invoke({"context": context, "question": question})
-                        st.write(res.content)
-                        
-                    except Exception as e:
-                        # Mostra o erro real na tela para facilitar o diagnóstico
-                        st.error(f"Erro na comunicação com a IA: {e}")
-                    
-    finally:
-        if os.path.exists(tmp_path):
-            os.remove(tmp_path)
-
-elif not uploaded_file:
-    st.info("Envie um PDF para começar.")
+            # 2. O Prompt "Engenharia de Prompt" para fluidez
+            system_prompt = """
+            Você é um Consultor Sênior em Segurança do Trabalho (HSE).
+            Sua missão é orientar profissionais com base estrita nas Normas Regulamentadoras (NRs).
+            
+            Diretrizes de Resposta:
+            1. **Tom de Voz:** Profissional, direto, mas educado e prestativo.
+            2. **Estrutura:** Use tópicos (bullet points) para listas. É mais fácil de ler.
+            3. **Citação:** Sempre cite qual NR e qual item embasa sua resposta (ex: "Conforme NR-35 item 35.2...").
+            4. **Honestidade:** Se a informação não estiver no contexto abaixo, diga que a norma consultada não especifica, não invente.
+            
+            Contexto das Normas:
+            {context}
+            
+            Pergunta do Usuário: {question}
+            """
+            
+            prompt_template = ChatPromptTemplate.from_template(system_prompt)
+            
+            # 3. Chama a IA (Groq)
+            llm = ChatGroq(temperature=0.1, model_name="llama-3.3-70b-versatile", groq_api_key=groq_key)
+            chain = prompt_template | llm
+            
+            response = chain.invoke({"context": context_text, "question": prompt})
+            
+            # Adiciona as fontes no final da resposta
+            final_response = response.content +f"\n\n\n*Fontes consultadas: {', '.join(sources)}*"
+            
+            st.markdown(final_response)
+            st.session_state.messages.append({"role": "assistant", "content": final_response})
