@@ -1,5 +1,6 @@
 import streamlit as st
 import os
+import google.generativeai as genai # Biblioteca oficial para listar modelos
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_pinecone import PineconeVectorStore
@@ -9,29 +10,78 @@ from langchain_core.prompts import ChatPromptTemplate
 st.set_page_config(page_title="IA de Segurança do Trabalho", page_icon="👷", layout="centered")
 
 # --- SEGREDOS ---
-# Verifica se as chaves existem antes de continuar
 if "GOOGLE_API_KEY" in st.secrets:
     google_key = st.secrets["GOOGLE_API_KEY"]
 else:
-    st.error("ERRO: A chave GOOGLE_API_KEY não foi encontrada. Verifique os Secrets.")
+    st.error("ERRO: A chave GOOGLE_API_KEY não foi encontrada nos Secrets.")
     st.stop()
 
 if "PINECONE_API_KEY" in st.secrets:
     pinecone_key = st.secrets["PINECONE_API_KEY"]
 else:
-    st.error("ERRO: A chave PINECONE_API_KEY não foi encontrada. Verifique os Secrets.")
+    st.error("ERRO: A chave PINECONE_API_KEY não foi encontrada nos Secrets.")
     st.stop()
 
 st.title("👷 Consultor de NRs (IA)")
 st.caption("Base de conhecimento unificada (Powered by Google Gemini)")
 
+# --- FUNÇÃO DE AUTO-DESCOBERTA DE MODELO ---
+@st.cache_resource
+def descobrir_modelo_google(api_key):
+    """
+    Pergunta ao Google quais modelos estão disponíveis para esta chave
+    e retorna o melhor para uso.
+    """
+    genai.configure(api_key=api_key)
+    try:
+        # Lista todos os modelos disponíveis
+        modelos = list(genai.list_models())
+        
+        # Filtra apenas os que geram texto (generateContent) e são da família Gemini
+        modelos_uteis = [m.name for m in modelos if 'generateContent' in m.supported_generation_methods and 'gemini' in m.name]
+        
+        # Tenta priorizar o Flash (mais rápido), depois o Pro
+        modelo_escolhido = None
+        
+        # 1. Tenta achar o 1.5 Flash
+        for m in modelos_uteis:
+            if "1.5-flash" in m:
+                modelo_escolhido = m
+                break
+        
+        # 2. Se não achar, tenta o 1.5 Pro
+        if not modelo_escolhido:
+            for m in modelos_uteis:
+                if "1.5-pro" in m:
+                    modelo_escolhido = m
+                    break
+        
+        # 3. Se não achar, pega qualquer um disponível (ex: 1.0-pro)
+        if not modelo_escolhido and modelos_uteis:
+            modelo_escolhido = modelos_uteis[0]
+            
+        if modelo_escolhido:
+            # Remove o prefixo 'models/' se vier junto, pois o LangChain as vezes duplica
+            return modelo_escolhido.replace("models/", "")
+        else:
+            return "gemini-1.5-flash" # Fallback padrão se a lista falhar
+            
+    except Exception as e:
+        st.warning(f"Não consegui listar os modelos automaticamente: {e}. Usando padrão.")
+        return "gemini-1.5-flash"
+
+# Descobre o modelo agora
+nome_modelo_atual = descobrir_modelo_google(google_key)
+
+# Mostra no sidebar qual modelo está sendo usado (para você saber)
+with st.sidebar:
+    st.success(f"🤖 Modelo Ativo: {nome_modelo_atual}")
+
 # --- CONEXÃO COM A BASE DE DADOS (PINECONE) ---
 @st.cache_resource
 def get_knowledge_base():
     os.environ['PINECONE_API_KEY'] = pinecone_key 
-    
     embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
-    
     vectorstore = PineconeVectorStore.from_existing_index(
         index_name="base-nrs",
         embedding=embeddings
@@ -58,7 +108,7 @@ if prompt := st.chat_input("Ex: Quais os exames obrigatórios para trabalho em a
         st.markdown(prompt)
 
     with st.chat_message("assistant"):
-        with st.spinner("Consultando normas com Gemini..."):
+        with st.spinner(f"Consultando normas com {nome_modelo_atual}..."):
             
             try:
                 # 1. Busca no Pinecone
@@ -93,10 +143,9 @@ if prompt := st.chat_input("Ex: Quais os exames obrigatórios para trabalho em a
                     
                     prompt_template = ChatPromptTemplate.from_template(system_prompt)
                     
-                    # 3. Chama o Google Gemini
-                    # MUDANÇA AQUI: Usando 'gemini-1.5-flash-latest' ou 'gemini-pro'
+                    # 3. Chama o Google Gemini com o modelo descoberto
                     llm = ChatGoogleGenerativeAI(
-                        model="gemini-pro", # Tenta a versão mais recente do Flash
+                        model=nome_modelo_atual,
                         temperature=0.1,
                         google_api_key=google_key
                     )
@@ -110,7 +159,4 @@ if prompt := st.chat_input("Ex: Quais os exames obrigatórios para trabalho em a
                 st.session_state.messages.append({"role": "assistant", "content": response_text})
             
             except Exception as e:
-                # Se der erro de novo, ele avisa qual foi
-                st.error(f"Erro na IA: {e}")
-                st.info("Dica: Se o erro persistir, troque o modelo no código para 'gemini-pro'.")
-
+                st.error(f"Erro: {e}")
