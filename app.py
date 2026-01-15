@@ -1,6 +1,6 @@
 import streamlit as st
 import os
-from langchain_groq import ChatGroq
+from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_pinecone import PineconeVectorStore
 from langchain_core.prompts import ChatPromptTemplate
@@ -10,14 +10,14 @@ st.set_page_config(page_title="IA de Segurança do Trabalho", page_icon="👷", 
 
 # --- SEGREDOS ---
 try:
-    groq_key = st.secrets["GROQ_API_KEY"]
+    groq_key = st.secrets["GOOGLE_API_KEY"]
     pinecone_key = st.secrets["PINECONE_API_KEY"]
 except FileNotFoundError:
     st.warning("⚠️ Chaves de API não configuradas.")
     st.stop()
 
 st.title("👷 Consultor de NRs (IA)")
-st.caption("Base de conhecimento unificada de todas as Normas Regulamentadoras.")
+st.caption("Base de conhecimento unificada de todas as Normas Regulamentadoras gov.br MTE.")
 
 # --- CONEXÃO COM A BASE DE DADOS (PINECONE) ---
 @st.cache_resource
@@ -93,18 +93,21 @@ if prompt := st.chat_input("Ex: Quais os exames obrigatórios para trabalho em a
                     
                     prompt_template = ChatPromptTemplate.from_template(system_prompt)
                     
-                    # 3. Chama a IA (Groq)
-                    # ATENÇÃO: Mantive o modelo 70B (Potente). 
-                    # Se der erro de limite (429) de novo, troque para "llama-3.1-8b-instant"
-                    llm = ChatGroq(temperature=0.1, model_name="llama-3.3-70b-versatile", groq_api_key=groq_key)
-                    chain = prompt_template | llm
+                    # 3. Chama o Google Gemini (Gratuito e Rápido)
+                    llm = ChatGoogleGenerativeAI(
+                        model="gemini-1.5-flash",
+                        temperature=0.1,
+                        google_api_key=google_key
+                    )
                     
+                    chain = prompt_template | llm
                     response = chain.invoke({"context": context_text, "question": prompt})
                     
-                    response_text = response.content + f"\n\n\n*Fontes consultadas: {', '.join(sources)}*"
+                    response_text = response.content + f"\n\n\n*Fontes: {', '.join(sources)}*"
                 
                 st.markdown(response_text)
                 st.session_state.messages.append({"role": "assistant", "content": response_text})
             
             except Exception as e:
-                st.error(f"Ocorreu um erro durante a resposta: {e}")
+                st.error(f"Erro: {e}")
+
