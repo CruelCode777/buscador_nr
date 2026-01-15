@@ -1,181 +1,91 @@
 import streamlit as st
-import os
 from langchain_groq import ChatGroq
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_pinecone import PineconeVectorStore
 from langchain_core.prompts import ChatPromptTemplate
 
-# --- TENTATIVA DE CARREGAR ANALYTICS (Blindado) ---
-try:
-    import streamlit_analytics2 as analytics
-    HAS_ANALYTICS = True
-except ImportError:
-    HAS_ANALYTICS = False
+# Configuração da Página
+st.set_page_config(page_title="IA de Segurança do Trabalho", page_icon="👷", layout="centered")
 
-# --- CONFIGURAÇÃO DA PÁGINA ---
-st.set_page_config(page_title="CONSULTOR SST", page_icon="🔍", layout="centered")
+# --- SEGREDOS ---
+# Configure no Streamlit Cloud: GROQ_API_KEY e PINECONE_API_KEY
+groq_key = st.secrets["GROQ_API_KEY"]
+pinecone_key = st.secrets["PINECONE_API_KEY"]
 
-# --- ESTILO GOOGLE (CSS INJETADO) ---
-def local_css():
-    st.markdown("""
-    <style>
-    /* Importando fonte estilo Google */
-    @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;700&display=swap');
+st.title("👷 Consultor de NRs (IA)")
+st.caption("Base de conhecimento unificada de todas as Normas Regulamentadoras.")
 
-    html, body, [class*="css"] {
-        font-family: 'Roboto', sans-serif;
-    }
-
-    /* Esconde menus padrões do Streamlit para limpar a tela */
-    #MainMenu {visibility: hidden;}
-    footer {visibility: hidden;}
-    header {visibility: hidden;}
+# --- CONEXÃO COM A BASE DE DADOS (PINECONE) ---
+@st.cache_resource
+def get_knowledge_base():
+    embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
     
-    /* Centraliza o título */
-    .title-container {
-        text-align: center;
-        margin-top: 50px;
-        margin-bottom: 30px;
-    }
-    
-    /* Estilo das letras do Google */
-    .g-blue {color: #4285F4;}
-    .g-red {color: #EA4335;}
-    .g-yellow {color: #FBBC05;}
-    .g-green {color: #34A853;}
-    
-    .big-font {
-        font-size: 60px;
-        font-weight: bold;
-    }
+    # Conecta ao índice que você criou e já populou
+    vectorstore = PineconeVectorStore.from_existing_index(
+        index_name="base-nrs",
+        embedding=embeddings,
+        pinecone_api_key=pinecone_key
+    )
+    return vectorstore
 
-    /* Ajuste dos cards de mensagem */
-    .stChatMessage {
-        background-color: #f8f9fa;
-        border-radius: 10px;
-        border: 1px solid #dfe1e5;
-    }
-    </style>
-    """, unsafe_allow_html=True)
+vectorstore = get_knowledge_base()
 
-def google_logo():
-    st.markdown("""
-    <div class="title-container">
-        <span class="big-font g-blue">B</span>
-        <span class="big-font g-red">u</span>
-        <span class="big-font g-yellow">s</span>
-        <span class="big-font g-blue">c</span>
-        <span class="big-font g-green">a</span>
-        <span class="big-font g-red">r</span>
-        <span class="big-font g-blue" style="margin-left: 15px;">N</span>
-        <span class="big-font g-green">R</span>
-    </div>
-    <div style="text-align: center; color: #5f6368; margin-bottom: 40px;">
-        Inteligência Artificial aplicada à Segurança do Trabalho
-    </div>
-    """, unsafe_allow_html=True)
+# --- CHAT ---
+if "messages" not in st.session_state:
+    st.session_state.messages = []
 
-# --- FUNÇÃO PRINCIPAL ---
-def main_app():
-    local_css() # Aplica o visual Google
+# Mostra histórico
+for message in st.session_state.messages:
+    with st.chat_message(message["role"]):
+        st.markdown(message["content"])
 
-    # --- SEGREDOS ---
-    try:
-        groq_key = st.secrets["GROQ_API_KEY"]
-        pinecone_key = st.secrets["PINECONE_API_KEY"]
-    except FileNotFoundError:
-        st.warning("⚠️ Chaves de API não configuradas.")
-        st.stop()
+# Campo de pergunta
+if prompt := st.chat_input("Ex: Quais os exames obrigatórios para trabalho em altura?"):
+    st.session_state.messages.append({"role": "user", "content": prompt})
+    with st.chat_message("user"):
+        st.markdown(prompt)
 
-    # Se não houver mensagens ainda, mostra o Logo Gigante (Estilo Home do Google)
-    if "messages" not in st.session_state:
-        st.session_state.messages = []
+    with st.chat_message("assistant"):
+        with st.spinner("Consultando normas..."):
+            
+            # 1. Busca os trechos mais relevantes no Pinecone
+            retriever = vectorstore.as_retriever(search_kwargs={"k": 4}) # Traz 4 trechos
+            docs = retriever.invoke(prompt)
+            
+            # Formata o contexto
+            context_text = ""
+            sources = set()
+            for doc in docs:
+                context_text += f"{doc.page_content}\n---\n"
+                sources.add(doc.metadata['source']) # Pega o nome do arquivo original
 
-    if len(st.session_state.messages) == 0:
-        google_logo()
-    else:
-        # Se já tiver conversa, mostra um título menor no topo
-        st.markdown('### 🔍 Resultado em NR´s')
-
-    # --- CONEXÃO COM A BASE DE DADOS ---
-    @st.cache_resource
-    def get_knowledge_base():
-        os.environ['PINECONE_API_KEY'] = pinecone_key 
-        embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
-        vectorstore = PineconeVectorStore.from_existing_index(
-            index_name="base-nrs",
-            embedding=embeddings
-        )
-        return vectorstore
-
-    try:
-        vectorstore = get_knowledge_base()
-    except Exception as e:
-        st.error(f"Erro de conexão: {e}")
-        st.stop()
-
-    # --- CHAT ---
-    # Mostra mensagens anteriores
-    for message in st.session_state.messages:
-        with st.chat_message(message["role"]):
-            st.markdown(message["content"])
-
-    # Input estilo barra de pesquisa
-    if prompt := st.chat_input("Pesquise nas normas (ex: Cinto de segurança NR 35)"):
-        # Adiciona mensagem do usuário
-        st.session_state.messages.append({"role": "user", "content": prompt})
-        with st.chat_message("user"):
-            st.markdown(prompt)
-
-        # Resposta da IA
-        with st.chat_message("assistant"):
-            with st.spinner("Pesquisando..."):
-                try:
-                    retriever = vectorstore.as_retriever(search_kwargs={"k": 4})
-                    docs = retriever.invoke(prompt)
-                    
-                    if not docs:
-                        response_text = "Sua pesquisa não retornou resultados nas NRs indexadas."
-                    else:
-                        context_text = ""
-                        sources = set()
-                        for doc in docs:
-                            src = doc.metadata.get('source', 'NR Desconhecida')
-                            context_text += f"{doc.page_content}\n(Fonte: {src})\n---\n"
-                            sources.add(src)
-
-                        system_prompt = """
-                        Você é um Assistente Técnico (Estilo Google Search AI).
-                        Responda de forma direta, objetiva e formatada.
-                        
-                        Contexto Encontrado: {context}
-                        Pergunta: {question}
-                        """
-                        prompt_template = ChatPromptTemplate.from_template(system_prompt)
-                        llm = ChatGroq(temperature=0.1, model_name="llama-3.3-70b-versatile", groq_api_key=groq_key)
-                        chain = prompt_template | llm
-                        response = chain.invoke({"context": context_text, "question": prompt})
-                        
-                        response_text = response.content + f"\n\n\n*Fontes: {', '.join(sources)}*"
-                    
-                    st.markdown(response_text)
-                    st.session_state.messages.append({"role": "assistant", "content": response_text})
-                
-                except Exception as e:
-                    st.error(f"Erro: {e}")
-
-# --- EXECUÇÃO COM BLINDAGEM DO ANALYTICS ---
-if HAS_ANALYTICS:
-    with analytics.track():
-        main_app()
-    # Tenta mostrar painel admin (invisível para usuário comum)
-    try:
-        analytics.view(password="carlos123")
-    except:
-        pass
-else:
-    main_app()
-
-
-
-
+            # 2. O Prompt "Engenharia de Prompt" para fluidez
+            system_prompt = """
+            Você é um Consultor Sênior especialista em Segurança do Trabalho (HSE).
+            Sua missão é orientar profissionais com base estrita nas Normas Regulamentadoras (NRs).
+            
+            Diretrizes de Resposta:
+            1. **Tom de Voz:** Profissional, direto, mas educado e prestativo. Responda elogios com educação.
+            2. **Estrutura:** Use tópicos (bullet points) para listas. É mais fácil de ler.
+            3. **Citação:** Sempre cite qual NR e qual item embasa sua resposta (ex: "Conforme NR-35 item 35.2...").
+            4. **Honestidade:** Se a informação não estiver no contexto abaixo, diga que a norma consultada não especifica, não invente.
+            
+            Contexto das Normas:
+            {context}
+            
+            Pergunta do Usuário: {question}
+            """
+            
+            prompt_template = ChatPromptTemplate.from_template(system_prompt)
+            
+            # 3. Chama a IA (Groq)
+            llm = ChatGroq(temperature=0.1, model_name="llama-3.3-70b-versatile", groq_api_key=groq_key)
+            chain = prompt_template | llm
+            
+            response = chain.invoke({"context": context_text, "question": prompt})
+            
+            # Adiciona as fontes no final da resposta
+            final_response = response.content +f"\n\n\n*Fontes consultadas: {', '.join(sources)}*"
+            
+            st.markdown(final_response)
+            st.session_state.messages.append({"role": "assistant", "content": final_response})
