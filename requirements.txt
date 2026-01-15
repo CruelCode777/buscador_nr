@@ -1,4 +1,5 @@
 streamlit
+streamlit-analytics
 langchain-groq
 langchain-community
 langchain-huggingface
@@ -6,4 +7,3 @@ langchain-pinecone
 pinecone
 sentence-transformers
 python-dotenv
-
