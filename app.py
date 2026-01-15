@@ -1,5 +1,5 @@
 import streamlit as st
-import os  # <--- Importante adicionar isso
+import os
 from langchain_groq import ChatGroq
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_pinecone import PineconeVectorStore
@@ -102,3 +102,4 @@ if prompt := st.chat_input("Ex: Quais os exames obrigatórios para trabalho em a
             
             except Exception as e:
                 st.error(f"Ocorreu um erro durante a resposta: {e}")
+
