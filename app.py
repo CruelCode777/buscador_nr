@@ -1,6 +1,6 @@
 import streamlit as st
 import os
-from langchain_google_genai import ChatGoogleGenerativeAI # <--- Biblioteca do Google
+from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_pinecone import PineconeVectorStore
 from langchain_core.prompts import ChatPromptTemplate
@@ -9,11 +9,17 @@ from langchain_core.prompts import ChatPromptTemplate
 st.set_page_config(page_title="IA de Segurança do Trabalho", page_icon="👷", layout="centered")
 
 # --- SEGREDOS ---
-try:
-    google_key = st.secrets["GOOGLE_API_KEY"] # <--- Pegando a chave do Google
+# Verifica se as chaves existem antes de continuar
+if "GOOGLE_API_KEY" in st.secrets:
+    google_key = st.secrets["GOOGLE_API_KEY"]
+else:
+    st.error("ERRO: A chave GOOGLE_API_KEY não foi encontrada. Verifique os Secrets.")
+    st.stop()
+
+if "PINECONE_API_KEY" in st.secrets:
     pinecone_key = st.secrets["PINECONE_API_KEY"]
-except FileNotFoundError:
-    st.warning("⚠️ Chaves de API não configuradas.")
+else:
+    st.error("ERRO: A chave PINECONE_API_KEY não foi encontrada. Verifique os Secrets.")
     st.stop()
 
 st.title("👷 Consultor de NRs (IA)")
@@ -23,7 +29,7 @@ st.caption("Base de conhecimento unificada (Powered by Google Gemini)")
 @st.cache_resource
 def get_knowledge_base():
     os.environ['PINECONE_API_KEY'] = pinecone_key 
-    # Mantemos os embeddings do HuggingFace (não precisa mudar isso)
+    
     embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
     
     vectorstore = PineconeVectorStore.from_existing_index(
@@ -56,7 +62,7 @@ if prompt := st.chat_input("Ex: Quais os exames obrigatórios para trabalho em a
             
             try:
                 # 1. Busca no Pinecone
-                retriever = vectorstore.as_retriever(search_kwargs={"k": 5}) # Gemini aguenta mais contexto (k=5)
+                retriever = vectorstore.as_retriever(search_kwargs={"k": 5})
                 docs = retriever.invoke(prompt)
                 
                 if not docs:
@@ -87,9 +93,10 @@ if prompt := st.chat_input("Ex: Quais os exames obrigatórios para trabalho em a
                     
                     prompt_template = ChatPromptTemplate.from_template(system_prompt)
                     
-                    # 3. Chama o Google Gemini (Gratuito e Rápido)
+                    # 3. Chama o Google Gemini
+                    # MUDANÇA AQUI: Usando 'gemini-1.5-flash-latest' ou 'gemini-pro'
                     llm = ChatGoogleGenerativeAI(
-                        model="gemini-1.5-flash", # Modelo rápido e gratuito
+                        model="gemini-1.5-flash-latest", # Tenta a versão mais recente do Flash
                         temperature=0.1,
                         google_api_key=google_key
                     )
@@ -103,4 +110,6 @@ if prompt := st.chat_input("Ex: Quais os exames obrigatórios para trabalho em a
                 st.session_state.messages.append({"role": "assistant", "content": response_text})
             
             except Exception as e:
-                st.error(f"Erro: {e}")
+                # Se der erro de novo, ele avisa qual foi
+                st.error(f"Erro na IA: {e}")
+                st.info("Dica: Se o erro persistir, troque o modelo no código para 'gemini-pro'.")
