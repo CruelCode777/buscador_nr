@@ -1,5 +1,5 @@
 import streamlit as st
-import streamlit_analytics # <--- Nova importação
+import streamlit_analytics2 as streamlit_analytics
 import os
 from langchain_groq import ChatGroq
 from langchain_huggingface import HuggingFaceEmbeddings
@@ -112,3 +112,4 @@ with streamlit_analytics.track():
 st.write("---")
 # Escolha uma senha difícil aqui. O padrão abaixo é "carlos123"
 streamlit_analytics.view(password="carlos123")
+
