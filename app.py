@@ -90,7 +90,7 @@ if prompt := st.chat_input("Ex: Quais os exames obrigatórios para trabalho em a
                     prompt_template = ChatPromptTemplate.from_template(system_prompt)
                     
                     # 3. Chama a IA (Groq) - Usando modelo estável
-                    llm = ChatGroq(temperature=0.1, model_name="llama-3.3-70b-versatile", groq_api_key=groq_key)
+                    llm = ChatGroq(temperature=0.1, model_name="llama-3.1-8b-instant", groq_api_key=groq_key)
                     chain = prompt_template | llm
                     
                     response = chain.invoke({"context": context_text, "question": prompt})
@@ -102,3 +102,4 @@ if prompt := st.chat_input("Ex: Quais os exames obrigatórios para trabalho em a
             
             except Exception as e:
                 st.error(f"Ocorreu um erro durante a resposta: {e}")
+
