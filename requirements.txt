@@ -2,6 +2,7 @@ streamlit
 langchain-groq
 langchain-community
 langchain-huggingface
+sentence-transformers
 chromadb
 pypdf
 python-dotenv
