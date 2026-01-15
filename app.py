@@ -1,5 +1,5 @@
 import streamlit as st
-import os 
+import os
 from langchain_groq import ChatGroq
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_pinecone import PineconeVectorStore
@@ -9,8 +9,12 @@ from langchain_core.prompts import ChatPromptTemplate
 st.set_page_config(page_title="IA de Segurança do Trabalho", page_icon="👷", layout="centered")
 
 # --- SEGREDOS ---
-groq_key = st.secrets["GROQ_API_KEY"]
-pinecone_key = st.secrets["PINECONE_API_KEY"]
+try:
+    groq_key = st.secrets["GROQ_API_KEY"]
+    pinecone_key = st.secrets["PINECONE_API_KEY"]
+except FileNotFoundError:
+    st.warning("⚠️ Chaves de API não configuradas.")
+    st.stop()
 
 st.title("👷 Consultor de NRs (IA)")
 st.caption("Base de conhecimento unificada de todas as Normas Regulamentadoras.")
@@ -18,12 +22,12 @@ st.caption("Base de conhecimento unificada de todas as Normas Regulamentadoras."
 # --- CONEXÃO COM A BASE DE DADOS (PINECONE) ---
 @st.cache_resource
 def get_knowledge_base():
-    # Define a chave no ambiente (é assim que a nova biblioteca procura)
+    # Define a chave no ambiente
     os.environ['PINECONE_API_KEY'] = pinecone_key 
 
     embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
     
-    # Conecta ao índice (agora sem passar a chave explicitamente aqui dentro)
+    # Conecta ao índice
     vectorstore = PineconeVectorStore.from_existing_index(
         index_name="base-nrs",
         embedding=embeddings
@@ -89,8 +93,10 @@ if prompt := st.chat_input("Ex: Quais os exames obrigatórios para trabalho em a
                     
                     prompt_template = ChatPromptTemplate.from_template(system_prompt)
                     
-                    # 3. Chama a IA (Groq) - Usando modelo estável
-                    llm = ChatGroq(temperature=0.1, model_name="llama-3.1-8b-instant", groq_api_key=groq_key)
+                    # 3. Chama a IA (Groq)
+                    # ATENÇÃO: Mantive o modelo 70B (Potente). 
+                    # Se der erro de limite (429) de novo, troque para "llama-3.1-8b-instant"
+                    llm = ChatGroq(temperature=0.1, model_name="llama-3.3-70b-versatile", groq_api_key=groq_key)
                     chain = prompt_template | llm
                     
                     response = chain.invoke({"context": context_text, "question": prompt})
@@ -102,4 +108,3 @@ if prompt := st.chat_input("Ex: Quais os exames obrigatórios para trabalho em a
             
             except Exception as e:
                 st.error(f"Ocorreu um erro durante a resposta: {e}")
-
