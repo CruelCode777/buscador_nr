@@ -13,7 +13,7 @@ except ImportError:
     HAS_ANALYTICS = False
 
 # --- CONFIGURAÇÃO DA PÁGINA ---
-st.set_page_config(page_title="CONSULTA NR'S", page_icon="🔍", layout="centered")
+st.set_page_config(page_title="CONSULTOR SST", page_icon="🔍", layout="centered")
 
 # --- ESTILO GOOGLE (CSS INJETADO) ---
 def local_css():
@@ -95,7 +95,7 @@ def main_app():
         google_logo()
     else:
         # Se já tiver conversa, mostra um título menor no topo
-        st.markdown('### 🔍 Buscador NR')
+        st.markdown('### 🔍 Resultado em NR'S)
 
     # --- CONEXÃO COM A BASE DE DADOS ---
     @st.cache_resource
@@ -175,4 +175,5 @@ if HAS_ANALYTICS:
         pass
 else:
     main_app()
+
 
