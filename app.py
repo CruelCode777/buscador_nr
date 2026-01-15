@@ -1,29 +1,103 @@
 import streamlit as st
-import streamlit_analytics2  # <--- Importando com o nome real, sem apelidos
 import os
 from langchain_groq import ChatGroq
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_pinecone import PineconeVectorStore
 from langchain_core.prompts import ChatPromptTemplate
 
-# --- CONFIGURAÇÃO DA PÁGINA ---
-st.set_page_config(page_title="Consultor SST", page_icon="👷", layout="centered")
+# --- TENTATIVA DE CARREGAR ANALYTICS (Blindado) ---
+try:
+    import streamlit_analytics2 as analytics
+    HAS_ANALYTICS = True
+except ImportError:
+    HAS_ANALYTICS = False
 
-# --- RASTREAMENTO (Usando a biblioteca 2 explícita) ---
-with streamlit_analytics2.track():
+# --- CONFIGURAÇÃO DA PÁGINA ---
+st.set_page_config(page_title="Busca NR", page_icon="🔍", layout="centered")
+
+# --- ESTILO GOOGLE (CSS INJETADO) ---
+def local_css():
+    st.markdown("""
+    <style>
+    /* Importando fonte estilo Google */
+    @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;700&display=swap');
+
+    html, body, [class*="css"] {
+        font-family: 'Roboto', sans-serif;
+    }
+
+    /* Esconde menus padrões do Streamlit para limpar a tela */
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+    header {visibility: hidden;}
+    
+    /* Centraliza o título */
+    .title-container {
+        text-align: center;
+        margin-top: 50px;
+        margin-bottom: 30px;
+    }
+    
+    /* Estilo das letras do Google */
+    .g-blue {color: #4285F4;}
+    .g-red {color: #EA4335;}
+    .g-yellow {color: #FBBC05;}
+    .g-green {color: #34A853;}
+    
+    .big-font {
+        font-size: 60px;
+        font-weight: bold;
+    }
+
+    /* Ajuste dos cards de mensagem */
+    .stChatMessage {
+        background-color: #f8f9fa;
+        border-radius: 10px;
+        border: 1px solid #dfe1e5;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+def google_logo():
+    st.markdown("""
+    <div class="title-container">
+        <span class="big-font g-blue">B</span>
+        <span class="big-font g-red">u</span>
+        <span class="big-font g-yellow">s</span>
+        <span class="big-font g-blue">c</span>
+        <span class="big-font g-green">a</span>
+        <span class="big-font g-red">r</span>
+        <span class="big-font g-blue" style="margin-left: 15px;">N</span>
+        <span class="big-font g-green">R</span>
+    </div>
+    <div style="text-align: center; color: #5f6368; margin-bottom: 40px;">
+        Inteligência Artificial aplicada à Segurança do Trabalho
+    </div>
+    """, unsafe_allow_html=True)
+
+# --- FUNÇÃO PRINCIPAL ---
+def main_app():
+    local_css() # Aplica o visual Google
 
     # --- SEGREDOS ---
     try:
         groq_key = st.secrets["GROQ_API_KEY"]
         pinecone_key = st.secrets["PINECONE_API_KEY"]
     except FileNotFoundError:
-        st.warning("Segredos não configurados corretamente.")
+        st.warning("⚠️ Chaves de API não configuradas.")
         st.stop()
 
-    st.title("👷 Consultor de NRs")
-    st.caption("Base de conhecimento unificada de todas as Normas Regulamentadoras.")
+    # Se não houver mensagens ainda, mostra o Logo Gigante (Estilo Home do Google)
+    if "messages" not in st.session_state:
+        st.session_state.messages = []
 
-    # --- CONEXÃO COM A BASE DE DADOS (PINECONE) ---
+    if len(st.session_state.messages) == 0:
+        google_logo()
+    else:
+        # Se já tiver conversa, mostra um título menor no topo
+        st.markdown('### 🔍 Buscador NR')
+
+    # --- CONEXÃO COM A BASE DE DADOS ---
     @st.cache_resource
     def get_knowledge_base():
         os.environ['PINECONE_API_KEY'] = pinecone_key 
@@ -37,43 +111,44 @@ with streamlit_analytics2.track():
     try:
         vectorstore = get_knowledge_base()
     except Exception as e:
-        st.error(f"Erro ao conectar no banco de dados: {e}")
+        st.error(f"Erro de conexão: {e}")
         st.stop()
 
     # --- CHAT ---
-    if "messages" not in st.session_state:
-        st.session_state.messages = []
-
+    # Mostra mensagens anteriores
     for message in st.session_state.messages:
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
 
-    if prompt := st.chat_input("Ex: Quais os exames obrigatórios para trabalho em altura?"):
+    # Input estilo barra de pesquisa
+    if prompt := st.chat_input("Pesquise nas normas (ex: Cinto de segurança NR 35)"):
+        # Adiciona mensagem do usuário
         st.session_state.messages.append({"role": "user", "content": prompt})
         with st.chat_message("user"):
             st.markdown(prompt)
 
+        # Resposta da IA
         with st.chat_message("assistant"):
-            with st.spinner("Consultando a base unificada de normas..."):
+            with st.spinner("Pesquisando..."):
                 try:
                     retriever = vectorstore.as_retriever(search_kwargs={"k": 4})
                     docs = retriever.invoke(prompt)
                     
                     if not docs:
-                        response_text = "Não encontrei informações sobre isso na base de dados das NRs."
+                        response_text = "Sua pesquisa não retornou resultados nas NRs indexadas."
                     else:
                         context_text = ""
                         sources = set()
                         for doc in docs:
-                            src = doc.metadata.get('source', 'Desconhecido')
+                            src = doc.metadata.get('source', 'NR Desconhecida')
                             context_text += f"{doc.page_content}\n(Fonte: {src})\n---\n"
                             sources.add(src)
 
                         system_prompt = """
-                        Você é um Consultor Sênior em Segurança do Trabalho (HSE).
-                        Use tópicos e cite a NR correspondente.
+                        Você é um Assistente Técnico (Estilo Google Search AI).
+                        Responda de forma direta, objetiva e formatada.
                         
-                        Contexto: {context}
+                        Contexto Encontrado: {context}
                         Pergunta: {question}
                         """
                         prompt_template = ChatPromptTemplate.from_template(system_prompt)
@@ -89,5 +164,14 @@ with streamlit_analytics2.track():
                 except Exception as e:
                     st.error(f"Erro: {e}")
 
-
-
+# --- EXECUÇÃO COM BLINDAGEM DO ANALYTICS ---
+if HAS_ANALYTICS:
+    with analytics.track():
+        main_app()
+    # Tenta mostrar painel admin (invisível para usuário comum)
+    try:
+        analytics.view(password="carlos123")
+    except:
+        pass
+else:
+    main_app()
