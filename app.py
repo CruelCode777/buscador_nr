@@ -6,14 +6,14 @@ from langchain_pinecone import PineconeVectorStore
 from langchain_core.prompts import ChatPromptTemplate
 
 # Configuração da Página
-st.set_page_config(page_title="Consultor SST", page_icon="👷", layout="centered")
+st.set_page_config(page_title="CONSULTOR SST", page_icon="👷", layout="centered")
 
 # --- SEGREDOS ---
 groq_key = st.secrets["GROQ_API_KEY"]
 pinecone_key = st.secrets["PINECONE_API_KEY"]
 
 st.title("👷 Consultor de NRs")
-st.caption("Base de conhecimento unificada de todas as Normas Regulamentadoras publicadas no site do MTE (gov.br database.)")
+st.caption("Base de conhecimento unificada de todas as Normas Regulamentadoras.")
 
 # --- CONEXÃO COM A BASE DE DADOS (PINECONE) ---
 @st.cache_resource
@@ -102,6 +102,3 @@ if prompt := st.chat_input("Ex: Quais os exames obrigatórios para trabalho em a
             
             except Exception as e:
                 st.error(f"Ocorreu um erro durante a resposta: {e}")
-
-
-
