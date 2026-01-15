@@ -1,5 +1,5 @@
 import streamlit as st
-import os  # <--- Importante adicionar isso
+import os 
 from langchain_groq import ChatGroq
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_pinecone import PineconeVectorStore
@@ -12,7 +12,7 @@ st.set_page_config(page_title="IA de Segurança do Trabalho", page_icon="👷", 
 groq_key = st.secrets["GROQ_API_KEY"]
 pinecone_key = st.secrets["PINECONE_API_KEY"]
 
-st.title("👷 Consultor de NRs (IA)")
+st.title("👷 Consultor de NRs")
 st.caption("Base de conhecimento unificada de todas as Normas Regulamentadoras.")
 
 # --- CONEXÃO COM A BASE DE DADOS (PINECONE) ---
@@ -23,7 +23,6 @@ def get_knowledge_base():
 
     embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
     
-    # Conecta ao índice (agora sem passar a chave explicitamente aqui dentro)
     vectorstore = PineconeVectorStore.from_existing_index(
         index_name="base-nrs",
         embedding=embeddings
@@ -73,8 +72,9 @@ if prompt := st.chat_input("Ex: Quais os exames obrigatórios para trabalho em a
 
                     # 2. O Prompt
                     system_prompt = """
-                    Você é um Consultor Sênior em Segurança do Trabalho (HSE).
+                    Você é um Consultor Sênior Especialista em Segurança do Trabalho (HSE).
                     Sua missão é orientar profissionais com base estrita nas Normas Regulamentadoras (NRs).
+                    Seja sempre assertivo e muito específico. Deixe as informações completa cruzando as fontes, sem deixar duvidas ao usuario.
                     
                     Diretrizes:
                     1. Use tópicos para listas.
@@ -102,3 +102,4 @@ if prompt := st.chat_input("Ex: Quais os exames obrigatórios para trabalho em a
             
             except Exception as e:
                 st.error(f"Ocorreu um erro durante a resposta: {e}")
+
