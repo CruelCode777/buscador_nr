@@ -92,4 +92,5 @@ with streamlit_analytics2.track():
     # --- ÁREA ADMINISTRATIVA ---
     st.write("---")
     # Aqui chamamos a função view() da biblioteca 2 explicitamente
-    streamlit_analytics2.view(password="carlos123")
+    streamlit_analytics2.view(password="carlos1308@")
+
