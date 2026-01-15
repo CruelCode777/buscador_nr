@@ -1,3 +1,16 @@
+import subprocess
+import sys
+
+# --- HACK DE LIMPEZA DO PINECONE ---r
+try:
+    subprocess.check_call([sys.executable, "-m", "pip", "uninstall", "-y", "pinecone-plugin-inference"])
+    print("Plugin conflitante removido com sucesso!")
+except Exception:
+    pass
+# -----------------------------------
+
+import streamlit as st
+import os
 import streamlit as st
 import os
 import google.generativeai as genai # Biblioteca oficial para listar modelos
@@ -160,3 +173,4 @@ if prompt := st.chat_input("Ex: Quais os exames obrigatórios para trabalho em a
             
             except Exception as e:
                 st.error(f"Erro: {e}")
+
