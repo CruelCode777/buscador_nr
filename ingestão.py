@@ -10,7 +10,7 @@ PINECONE_API_KEY = "SUA_CHAVE_AQUI"
 INDEX_NAME = "base-nrs"
 
 # Inicializa Pinecone
-pc = Pinecone(api_key="pcsk_3yDmdF_KDGdqaSpynmKQtARBS3Y428FqCteuvxnkHE4gcsEvkRWSmwjA7HbbaTPY8YUMUT")
+pc = Pinecone(api_key="PINECONE_KEY_API_DIGITE_AQUI")
 
 # Modelo de Embeddings (O mesmo do site)
 embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
@@ -52,5 +52,6 @@ def carregar_tudo():
 if __name__ == "__main__":
 
     carregar_tudo()
+
 
 
