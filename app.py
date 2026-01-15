@@ -13,7 +13,7 @@ except ImportError:
     HAS_ANALYTICS = False
 
 # --- CONFIGURAÇÃO DA PÁGINA ---
-st.set_page_config(page_title="Busca NR", page_icon="🔍", layout="centered")
+st.set_page_config(page_title="CONSULTA NR'S", page_icon="🔍", layout="centered")
 
 # --- ESTILO GOOGLE (CSS INJETADO) ---
 def local_css():
@@ -175,3 +175,4 @@ if HAS_ANALYTICS:
         pass
 else:
     main_app()
+
