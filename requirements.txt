@@ -1,4 +1,5 @@
 streamlit
+google-generativeai
 langchain-google-genai
 langchain-community
 langchain-huggingface
