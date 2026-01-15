@@ -2,7 +2,7 @@
 
 > Uma aplicação de IA Generativa (RAG) capaz de consultar, cruzar dados e responder dúvidas sobre as 38 Normas Regulamentadoras de Segurança do Trabalho em segundos.
 
-[![Streamlit App](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://SEU-LINK-DO-STREAMLIT-AQUI.streamlit.app)
+[![Streamlit App](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://consultornrs.streamlit.app/)
 
 ## 🎯 O Problema
 Profissionais de Segurança do Trabalho (HSE) gastam horas consultando manualmente dezenas de PDFs para encontrar diretrizes específicas. 
