@@ -12,7 +12,7 @@ st.set_page_config(page_title="Consultoria em SSO", page_icon="👷", layout="ce
 groq_key = st.secrets["GROQ_API_KEY"]
 pinecone_key = st.secrets["PINECONE_API_KEY"]
 
-st.title("👷 Consultor de NRs")
+st.title("👷 quero te comer")
 st.caption("Base de conhecimento (Gov.br database atualizada, e unificada de todas as Normas Regulamentadoras.")
 
 # --- CONEXÃO COM A BASE DE DADOS (PINECONE) ---
@@ -102,4 +102,5 @@ if prompt := st.chat_input("Ex: Quais os exames obrigatórios para trabalho em a
             
             except Exception as e:
                 st.error(f"Ocorreu um erro durante a resposta: {e}")
+
 
