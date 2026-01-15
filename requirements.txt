@@ -3,6 +3,7 @@ langchain-groq
 langchain-community
 langchain-huggingface
 langchain-pinecone
-pinecone-client
+pinecone
 sentence-transformers
 python-dotenv
+
