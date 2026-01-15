@@ -1,9 +1,10 @@
 streamlit
-streamlit-analytics2
-langchain-groq
 langchain-community
 langchain-huggingface
-langchain-pinecone
-pinecone
-sentence-transformers
+chromadb
+pypdf
 python-dotenv
+pysqlite3-binary
+langchain-pinecone
+pinecone-client
+langchain-groq
