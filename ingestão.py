@@ -10,7 +10,7 @@ PINECONE_API_KEY = "sua_chave_do_pinecone_aqui"
 INDEX_NAME = "base-nrs"
 
 # Inicializa Pinecone
-pc = Pinecone(api_key=pcsk_3yDmdF_KDGdqaSpynmKQtARBS3Y428FqCteuvxnkHE4gcsEvkRWSmwjA7HbbaTPY8YUMUT)
+pc = Pinecone(api_key="pcsk_3yDmdF_KDGdqaSpynmKQtARBS3Y428FqCteuvxnkHE4gcsEvkRWSmwjA7HbbaTPY8YUMUT")
 
 # Modelo de Embeddings (O mesmo do site)
 embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
@@ -50,4 +50,5 @@ def carregar_tudo():
     print("✅ Concluído! Sua base de conhecimento está online.")
 
 if __name__ == "__main__":
+
     carregar_tudo()
