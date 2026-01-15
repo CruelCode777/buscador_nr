@@ -95,7 +95,7 @@ def main_app():
         google_logo()
     else:
         # Se já tiver conversa, mostra um título menor no topo
-        st.markdown('### 🔍 Resultado em NR'S')
+        st.markdown('### 🔍 Resultado em NR´s')
 
     # --- CONEXÃO COM A BASE DE DADOS ---
     @st.cache_resource
@@ -175,6 +175,7 @@ if HAS_ANALYTICS:
         pass
 else:
     main_app()
+
 
 
 
