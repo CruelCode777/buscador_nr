@@ -1,121 +1,104 @@
 import streamlit as st
-import os
-import google.generativeai as genai
-from pinecone import Pinecone
-from sentence_transformers import SentenceTransformer
+import os  # <--- Importante adicionar isso
+from langchain_groq import ChatGroq
+from langchain_huggingface import HuggingFaceEmbeddings
+from langchain_pinecone import PineconeVectorStore
+from langchain_core.prompts import ChatPromptTemplate
 
 # Configuração da Página
 st.set_page_config(page_title="IA de Segurança do Trabalho", page_icon="👷", layout="centered")
 
-# --- 1. CONFIGURAÇÃO DE CHAVES (Manual e Direta) ---
-if "GOOGLE_API_KEY" not in st.secrets:
-    st.error("⚠️ Erro: Falta GOOGLE_API_KEY nos Secrets.")
-    st.stop()
+# --- SEGREDOS ---
+groq_key = st.secrets["GROQ_API_KEY"]
+pinecone_key = st.secrets["PINECONE_API_KEY"]
 
-if "PINECONE_API_KEY" not in st.secrets:
-    st.error("⚠️ Erro: Falta PINECONE_API_KEY nos Secrets.")
-    st.stop()
+st.title("👷 Consultor de NRs (IA)")
+st.caption("Base de conhecimento unificada de todas as Normas Regulamentadoras.")
 
-# Configura o Google
-genai.configure(api_key=st.secrets["GOOGLE_API_KEY"])
-
-# --- 2. CARREGAMENTO DOS MODELOS (Cacheado) ---
+# --- CONEXÃO COM A BASE DE DADOS (PINECONE) ---
 @st.cache_resource
-def carregar_modelos():
-    # Carrega o modelo de embeddings (transforma texto em numeros)
-    # Isso substitui o HuggingFaceEmbeddings do LangChain
-    model = SentenceTransformer('sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2')
-    return model
+def get_knowledge_base():
+    # Define a chave no ambiente (é assim que a nova biblioteca procura)
+    os.environ['PINECONE_API_KEY'] = pinecone_key 
 
-@st.cache_resource
-def conectar_pinecone():
-    # Conecta direto no Pinecone (sem LangChain)
-    pc = Pinecone(api_key=st.secrets["PINECONE_API_KEY"])
-    # SEU INDEX SE CHAMA 'base-nrs', certo?
-    index = pc.Index("base-nrs") 
-    return index
+    embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
+    
+    # Conecta ao índice (agora sem passar a chave explicitamente aqui dentro)
+    vectorstore = PineconeVectorStore.from_existing_index(
+        index_name="base-nrs",
+        embedding=embeddings
+    )
+    return vectorstore
 
 try:
-    embedding_model = carregar_modelos()
-    pinecone_index = conectar_pinecone()
+    vectorstore = get_knowledge_base()
 except Exception as e:
-    st.error(f"Erro ao carregar modelos: {e}")
+    st.error(f"Erro ao conectar no banco de dados: {e}")
     st.stop()
 
-# --- 3. FUNÇÃO DE BUSCA E RESPOSTA ---
-def buscar_e_responder(pergunta):
-    # A. Transforma a pergunta em números
-    vector = embedding_model.encode(pergunta).tolist()
-    
-    # B. Busca no Pinecone
-    resultados = pinecone_index.query(vector=vector, top_k=5, include_metadata=True)
-    
-    # C. Monta o Contexto
-    contexto = ""
-    fontes = set()
-    for match in resultados['matches']:
-        if match['score'] > 0.3: # Filtra coisas pouco relevantes
-            texto = match['metadata'].get('text', '') # O Pinecone guarda o texto no campo 'text' ou 'page_content'
-            if not texto: texto = match['metadata'].get('page_content', '')
-            
-            fonte = match['metadata'].get('source', 'NR')
-            contexto += f"- {texto}\n(Fonte: {fonte})\n---\n"
-            fontes.add(fonte)
-    
-    if not contexto:
-        return "Não encontrei informações suficientes nas NRs processadas.", []
-
-    # D. Manda para o Google (Direto)
-    prompt_final = f"""
-    Você é um Engenheiro de Segurança do Trabalho.
-    Responda à pergunta do usuário usando APENAS o contexto abaixo.
-    Se a resposta não estiver no contexto, diga que a norma não cita.
-
-    CONTEXTO:
-    {contexto}
-
-    PERGUNTA:
-    {pergunta}
-    """
-    
-    # Tenta modelos em ordem de prioridade
-    modelos_para_testar = ['gemini-1.5-flash', 'gemini-pro', 'gemini-1.0-pro']
-    
-    resposta_texto = "Erro ao conectar com o Google."
-    
-    for nome_modelo in modelos_para_testar:
-        try:
-            model = genai.GenerativeModel(nome_modelo)
-            response = model.generate_content(prompt_final)
-            resposta_texto = response.text
-            break # Se funcionou, para o loop
-        except Exception:
-            continue # Se deu erro, tenta o proximo da lista
-
-    return resposta_texto, list(fontes)
-
-# --- 4. INTERFACE DE CHAT ---
-st.title("👷 Consultor de NRs (Modo Raiz)")
-st.caption("Sem LangChain | Conexão Direta")
-
+# --- CHAT ---
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
+# Mostra histórico
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
-if prompt := st.chat_input("Ex: O que a NR diz sobre escadas?"):
+# Campo de pergunta
+if prompt := st.chat_input("Ex: Quais os exames obrigatórios para trabalho em altura?"):
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
 
     with st.chat_message("assistant"):
-        with st.spinner("Processando..."):
-            resposta, fontes = buscar_e_responder(prompt)
+        with st.spinner("Consultando a base unificada de normas..."):
             
-            if fontes:
-                resposta += f"\n\n*Fontes: {', '.join(fontes)}*"
+            try:
+                # 1. Busca os trechos mais relevantes no Pinecone
+                retriever = vectorstore.as_retriever(search_kwargs={"k": 4})
+                docs = retriever.invoke(prompt)
+                
+                if not docs:
+                    response_text = "Não encontrei informações sobre isso na base de dados das NRs."
+                else:
+                    # Formata o contexto
+                    context_text = ""
+                    sources = set()
+                    for doc in docs:
+                        # Proteção caso o metadado 'source' esteja vazio
+                        src = doc.metadata.get('source', 'Desconhecido')
+                        context_text += f"{doc.page_content}\n(Fonte: {src})\n---\n"
+                        sources.add(src)
+
+                    # 2. O Prompt
+                    system_prompt = """
+                    Você é um Consultor Sênior em Segurança do Trabalho (HSE).
+                    Sua missão é orientar profissionais com base estrita nas Normas Regulamentadoras (NRs).
+                    
+                    Diretrizes:
+                    1. Use tópicos para listas.
+                    2. Cite qual NR e item embasa a resposta.
+                    3. Se não estiver no contexto, diga que a norma não especifica.
+                    
+                    Contexto das Normas:
+                    {context}
+                    
+                    Pergunta do Usuário: {question}
+                    """
+                    
+                    prompt_template = ChatPromptTemplate.from_template(system_prompt)
+                    
+                    # 3. Chama a IA (Groq) - Usando modelo estável
+                    llm = ChatGroq(temperature=0.1, model_name="llama-3.3-70b-versatile", groq_api_key=groq_key)
+                    chain = prompt_template | llm
+                    
+                    response = chain.invoke({"context": context_text, "question": prompt})
+                    
+                    response_text = response.content + f"\n\n\n*Fontes consultadas: {', '.join(sources)}*"
+                
+                st.markdown(response_text)
+                st.session_state.messages.append({"role": "assistant", "content": response_text})
             
-            st.markdown(resposta)
-            st.session_state.messages.append({"role": "assistant", "content": resposta})
+            except Exception as e:
+                st.error(f"Ocorreu um erro durante a resposta: {e}")
