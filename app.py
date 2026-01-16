@@ -1,5 +1,6 @@
 import streamlit as st
 import os
+import google.generativeai as genai
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_pinecone import PineconeVectorStore
@@ -29,10 +30,9 @@ st.caption("Base de conhecimento unificada (Google Gemini)")
 def get_knowledge_base():
     os.environ['PINECONE_API_KEY'] = pinecone_key 
     
-    # Embeddings
     embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
     
-    # Conexão
+    # Conexão Simples e Direta
     vectorstore = PineconeVectorStore.from_existing_index(
         index_name="base-nrs",
         embedding=embeddings
@@ -42,7 +42,7 @@ def get_knowledge_base():
 try:
     vectorstore = get_knowledge_base()
 except Exception as e:
-    st.error(f"Erro de Conexão com Pinecone: {e}")
+    st.error(f"Erro ao conectar no banco de dados: {e}")
     st.stop()
 
 # --- CHAT ---
@@ -83,19 +83,16 @@ if prompt := st.chat_input("Ex: Quais os exames obrigatórios para trabalho em a
                     """
                     prompt_template = ChatPromptTemplate.from_template(system_prompt)
                     
-                    # 2. Tenta definir a IA (Com Fallback manual para erro 404)
+                    # 2. IA (Tenta Flash, se falhar tenta Pro)
                     try:
                         llm = ChatGoogleGenerativeAI(model="gemini-1.5-flash", temperature=0.1, google_api_key=google_key)
                         chain = prompt_template | llm
                         response = chain.invoke({"context": context_text, "question": prompt})
-                    except Exception as e_model:
-                        # Se der erro no Flash, tenta o Pro
-                        if "404" in str(e_model):
-                            llm = ChatGoogleGenerativeAI(model="gemini-pro", temperature=0.1, google_api_key=google_key)
-                            chain = prompt_template | llm
-                            response = chain.invoke({"context": context_text, "question": prompt})
-                        else:
-                            raise e_model # Se for outro erro, repassa
+                    except Exception:
+                        # Fallback seguro
+                        llm = ChatGoogleGenerativeAI(model="gemini-pro", temperature=0.1, google_api_key=google_key)
+                        chain = prompt_template | llm
+                        response = chain.invoke({"context": context_text, "question": prompt})
 
                     response_text = response.content + f"\n\n\n*Fontes: {', '.join(sources)}*"
                 
