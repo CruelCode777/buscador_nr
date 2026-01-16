@@ -1,8 +1,8 @@
 streamlit
 google-generativeai
-langchain-google-genai
 langchain-pinecone
-pinecone
 langchain-huggingface
+pinecone
 sentence-transformers
 python-dotenv
+
