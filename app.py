@@ -1,6 +1,19 @@
+import subprocess
+import sys
 import streamlit as st
+
+# --- HACK DE LIMPEZA DE CACHE (Força Bruta) ---
+# Isso remove a biblioteca antiga 'pinecone-client' que está presa na memória do servidor
+try:
+    # Tenta desinstalar silenciosamente antes de carregar qualquer coisa
+    subprocess.check_call([sys.executable, "-m", "pip", "uninstall", "-y", "pinecone-client"])
+except Exception:
+    pass
+# ---------------------------------------------
+
 import os
-from langchain_google_genai import ChatGoogleGenerativeAI # <--- Mudança aqui
+# Agora importamos as bibliotecas de IA (só depois da limpeza)
+from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_pinecone import PineconeVectorStore
 from langchain_core.prompts import ChatPromptTemplate
@@ -9,14 +22,17 @@ from langchain_core.prompts import ChatPromptTemplate
 st.set_page_config(page_title="IA de Segurança do Trabalho", page_icon="👷", layout="centered")
 
 # --- SEGREDOS ---
-# Importante: Garanta que no Streamlit Cloud o nome seja GOOGLE_API_KEY
 if "GOOGLE_API_KEY" in st.secrets:
     google_key = st.secrets["GOOGLE_API_KEY"]
 else:
     st.error("Erro: GOOGLE_API_KEY não encontrada nos Secrets.")
     st.stop()
 
-pinecone_key = st.secrets["PINECONE_API_KEY"]
+if "PINECONE_API_KEY" in st.secrets:
+    pinecone_key = st.secrets["PINECONE_API_KEY"]
+else:
+    st.error("Erro: PINECONE_API_KEY não encontrada nos Secrets.")
+    st.stop()
 
 st.title("👷 Consultor de NRs (IA)")
 st.caption("Base de conhecimento unificada (Google Gemini)")
@@ -59,14 +75,13 @@ if prompt := st.chat_input("Ex: Quais os exames obrigatórios para trabalho em a
         with st.spinner("Consultando a base unificada de normas..."):
             
             try:
-                # 1. Busca os trechos mais relevantes no Pinecone
-                retriever = vectorstore.as_retriever(search_kwargs={"k": 5}) # Aumentei para 5 pois o Gemini aguenta mais
+                # 1. Busca os trechos mais relevantes
+                retriever = vectorstore.as_retriever(search_kwargs={"k": 5})
                 docs = retriever.invoke(prompt)
                 
                 if not docs:
                     response_text = "Não encontrei informações sobre isso na base de dados das NRs."
                 else:
-                    # Formata o contexto
                     context_text = ""
                     sources = set()
                     for doc in docs:
@@ -74,7 +89,7 @@ if prompt := st.chat_input("Ex: Quais os exames obrigatórios para trabalho em a
                         context_text += f"{doc.page_content}\n(Fonte: {src})\n---\n"
                         sources.add(src)
 
-                    # 2. O Prompt
+                    # 2. Prompt
                     system_prompt = """
                     Você é um Consultor Sênior em Segurança do Trabalho (HSE).
                     Sua missão é orientar profissionais com base estrita nas Normas Regulamentadoras (NRs).
@@ -92,7 +107,7 @@ if prompt := st.chat_input("Ex: Quais os exames obrigatórios para trabalho em a
                     
                     prompt_template = ChatPromptTemplate.from_template(system_prompt)
                     
-                    # 3. Chama a IA (Google Gemini) - Substituindo a Groq
+                    # 3. Chama a IA (Google Gemini)
                     llm = ChatGoogleGenerativeAI(
                         model="gemini-1.5-flash",
                         temperature=0.1,
@@ -100,7 +115,6 @@ if prompt := st.chat_input("Ex: Quais os exames obrigatórios para trabalho em a
                     )
                     
                     chain = prompt_template | llm
-                    
                     response = chain.invoke({"context": context_text, "question": prompt})
                     
                     response_text = response.content + f"\n\n\n*Fontes consultadas: {', '.join(sources)}*"
