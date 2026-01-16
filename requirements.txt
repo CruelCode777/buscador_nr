@@ -11,7 +11,7 @@ langchain-google-genai
 langchain-community
 langchain-huggingface
 langchain-pinecone
-pinecone-client
 sentence-transformers
 python-dotenv
+
 
