@@ -1,6 +1,6 @@
 import streamlit as st
-import os  # <--- Importante adicionar isso
-from langchain_groq import ChatGroq
+import os
+from langchain_google_genai import ChatGoogleGenerativeAI # <--- Mudança aqui
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_pinecone import PineconeVectorStore
 from langchain_core.prompts import ChatPromptTemplate
@@ -9,21 +9,25 @@ from langchain_core.prompts import ChatPromptTemplate
 st.set_page_config(page_title="IA de Segurança do Trabalho", page_icon="👷", layout="centered")
 
 # --- SEGREDOS ---
-groq_key = st.secrets["GROQ_API_KEY"]
+# Importante: Garanta que no Streamlit Cloud o nome seja GOOGLE_API_KEY
+if "GOOGLE_API_KEY" in st.secrets:
+    google_key = st.secrets["GOOGLE_API_KEY"]
+else:
+    st.error("Erro: GOOGLE_API_KEY não encontrada nos Secrets.")
+    st.stop()
+
 pinecone_key = st.secrets["PINECONE_API_KEY"]
 
 st.title("👷 Consultor de NRs (IA)")
-st.caption("Base de conhecimento unificada de todas as Normas Regulamentadoras.")
+st.caption("Base de conhecimento unificada (Google Gemini)")
 
 # --- CONEXÃO COM A BASE DE DADOS (PINECONE) ---
 @st.cache_resource
 def get_knowledge_base():
-    # Define a chave no ambiente (é assim que a nova biblioteca procura)
     os.environ['PINECONE_API_KEY'] = pinecone_key 
 
     embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
     
-    # Conecta ao índice (agora sem passar a chave explicitamente aqui dentro)
     vectorstore = PineconeVectorStore.from_existing_index(
         index_name="base-nrs",
         embedding=embeddings
@@ -56,7 +60,7 @@ if prompt := st.chat_input("Ex: Quais os exames obrigatórios para trabalho em a
             
             try:
                 # 1. Busca os trechos mais relevantes no Pinecone
-                retriever = vectorstore.as_retriever(search_kwargs={"k": 4})
+                retriever = vectorstore.as_retriever(search_kwargs={"k": 5}) # Aumentei para 5 pois o Gemini aguenta mais
                 docs = retriever.invoke(prompt)
                 
                 if not docs:
@@ -66,7 +70,6 @@ if prompt := st.chat_input("Ex: Quais os exames obrigatórios para trabalho em a
                     context_text = ""
                     sources = set()
                     for doc in docs:
-                        # Proteção caso o metadado 'source' esteja vazio
                         src = doc.metadata.get('source', 'Desconhecido')
                         context_text += f"{doc.page_content}\n(Fonte: {src})\n---\n"
                         sources.add(src)
@@ -89,8 +92,13 @@ if prompt := st.chat_input("Ex: Quais os exames obrigatórios para trabalho em a
                     
                     prompt_template = ChatPromptTemplate.from_template(system_prompt)
                     
-                    # 3. Chama a IA (Groq) - Usando modelo estável
-                    llm = ChatGroq(temperature=0.1, model_name="llama-3.3-70b-versatile", groq_api_key=groq_key)
+                    # 3. Chama a IA (Google Gemini) - Substituindo a Groq
+                    llm = ChatGoogleGenerativeAI(
+                        model="gemini-1.5-flash",
+                        temperature=0.1,
+                        google_api_key=google_key
+                    )
+                    
                     chain = prompt_template | llm
                     
                     response = chain.invoke({"context": context_text, "question": prompt})
