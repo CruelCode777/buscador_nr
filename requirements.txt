@@ -1,17 +1,11 @@
 streamlit
-langchain-groq
+langchain-google-genai
 langchain-community
 langchain-huggingface
 langchain-pinecone
 pinecone
 sentence-transformers
 python-dotenv
-streamlit
-langchain-google-genai
-langchain-community
-langchain-huggingface
-langchain-pinecone
-sentence-transformers
-python-dotenv
+
 
 
