@@ -1,18 +1,5 @@
-import subprocess
-import sys
 import streamlit as st
-
-# --- HACK DE LIMPEZA DE CACHE (Força Bruta) ---
-# Isso remove a biblioteca antiga 'pinecone-client' que está presa na memória do servidor
-try:
-    # Tenta desinstalar silenciosamente antes de carregar qualquer coisa
-    subprocess.check_call([sys.executable, "-m", "pip", "uninstall", "-y", "pinecone-client"])
-except Exception:
-    pass
-# ---------------------------------------------
-
 import os
-# Agora importamos as bibliotecas de IA (só depois da limpeza)
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_pinecone import PineconeVectorStore
@@ -35,7 +22,7 @@ else:
     st.stop()
 
 st.title("👷 Consultor de NRs (IA)")
-st.caption("Base de conhecimento unificada (Google Gemini)")
+st.caption("Base de conhecimento unificada (Google Gemini Pro)")
 
 # --- CONEXÃO COM A BASE DE DADOS (PINECONE) ---
 @st.cache_resource
@@ -76,7 +63,8 @@ if prompt := st.chat_input("Ex: Quais os exames obrigatórios para trabalho em a
             
             try:
                 # 1. Busca os trechos mais relevantes
-                retriever = vectorstore.as_retriever(search_kwargs={"k": 5})
+                # Diminui um pouco o k para o gemini-pro (que tem janela menor que o flash)
+                retriever = vectorstore.as_retriever(search_kwargs={"k": 4})
                 docs = retriever.invoke(prompt)
                 
                 if not docs:
@@ -107,9 +95,10 @@ if prompt := st.chat_input("Ex: Quais os exames obrigatórios para trabalho em a
                     
                     prompt_template = ChatPromptTemplate.from_template(system_prompt)
                     
-                    # 3. Chama a IA (Google Gemini)
+                    # 3. Chama a IA (Google Gemini PRO)
+                    # O 'gemini-pro' é o modelo mais estável e compatível
                     llm = ChatGoogleGenerativeAI(
-                        model="gemini-1.5-flash",
+                        model="gemini-pro", 
                         temperature=0.1,
                         google_api_key=google_key
                     )
