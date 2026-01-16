@@ -1,6 +1,6 @@
 import streamlit as st
 import os
-import google.generativeai as genai
+# --- A CORREÇÃO ESTÁ AQUI: Removemos o import do 'google.generativeai' que dava erro ---
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_pinecone import PineconeVectorStore
@@ -10,29 +10,28 @@ from langchain_core.prompts import ChatPromptTemplate
 st.set_page_config(page_title="IA de Segurança do Trabalho", page_icon="👷", layout="centered")
 
 # --- SEGREDOS ---
-if "GOOGLE_API_KEY" in st.secrets:
-    google_key = st.secrets["GOOGLE_API_KEY"]
-else:
-    st.error("Erro: GOOGLE_API_KEY não encontrada nos Secrets.")
+if "GOOGLE_API_KEY" not in st.secrets:
+    st.error("⚠️ Erro: Adicione a GOOGLE_API_KEY nos Secrets do Streamlit.")
     st.stop()
 
-if "PINECONE_API_KEY" in st.secrets:
-    pinecone_key = st.secrets["PINECONE_API_KEY"]
-else:
-    st.error("Erro: PINECONE_API_KEY não encontrada nos Secrets.")
+if "PINECONE_API_KEY" not in st.secrets:
+    st.error("⚠️ Erro: Adicione a PINECONE_API_KEY nos Secrets do Streamlit.")
     st.stop()
+
+# Configura variáveis de ambiente
+os.environ["GOOGLE_API_KEY"] = st.secrets["GOOGLE_API_KEY"]
+os.environ["PINECONE_API_KEY"] = st.secrets["PINECONE_API_KEY"]
 
 st.title("👷 Consultor de NRs (IA)")
-st.caption("Base de conhecimento unificada (Google Gemini)")
+st.caption("Base de conhecimento unificada (Google Gemini 1.5 Flash)")
 
-# --- CONEXÃO COM A BASE DE DADOS (PINECONE) ---
+# --- CONEXÃO COM O BANCO DE DADOS ---
 @st.cache_resource
-def get_knowledge_base():
-    os.environ['PINECONE_API_KEY'] = pinecone_key 
-    
+def get_vectorstore():
+    # Embeddings
     embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
     
-    # Conexão Simples e Direta
+    # Conexão Pinecone
     vectorstore = PineconeVectorStore.from_existing_index(
         index_name="base-nrs",
         embedding=embeddings
@@ -40,9 +39,9 @@ def get_knowledge_base():
     return vectorstore
 
 try:
-    vectorstore = get_knowledge_base()
+    vectorstore = get_vectorstore()
 except Exception as e:
-    st.error(f"Erro ao conectar no banco de dados: {e}")
+    st.error(f"Erro ao conectar no Pinecone: {e}")
     st.stop()
 
 # --- CHAT ---
@@ -61,43 +60,40 @@ if prompt := st.chat_input("Ex: Quais os exames obrigatórios para trabalho em a
     with st.chat_message("assistant"):
         with st.spinner("Consultando normas..."):
             try:
-                # 1. Busca
+                # 1. Recuperação (Retrieval)
                 retriever = vectorstore.as_retriever(search_kwargs={"k": 5})
                 docs = retriever.invoke(prompt)
                 
                 if not docs:
-                    response_text = "Não encontrei informações sobre isso na base de dados das NRs."
+                    response_text = "Não encontrei informações relevantes na base de dados."
                 else:
-                    context_text = ""
-                    sources = set()
-                    for doc in docs:
-                        src = doc.metadata.get('source', 'Desconhecido')
-                        context_text += f"{doc.page_content}\n(Fonte: {src})\n---\n"
-                        sources.add(src)
+                    context_text = "\n\n".join([f"{d.page_content} (Fonte: {d.metadata.get('source', 'NR')})" for d in docs])
 
-                    system_prompt = """
-                    Você é um Consultor Sênior em Segurança do Trabalho (HSE).
-                    Responda com base estrita nas Normas Regulamentadoras (NRs).
-                    Contexto: {context}
+                    # 2. Prompt
+                    template = """
+                    Você é um Especialista em Segurança do Trabalho. Responda com base no contexto abaixo.
+                    
+                    Contexto:
+                    {context}
+                    
                     Pergunta: {question}
                     """
-                    prompt_template = ChatPromptTemplate.from_template(system_prompt)
+                    prompt_template = ChatPromptTemplate.from_template(template)
                     
-                    # 2. IA (Tenta Flash, se falhar tenta Pro)
-                    try:
-                        llm = ChatGoogleGenerativeAI(model="gemini-1.5-flash", temperature=0.1, google_api_key=google_key)
-                        chain = prompt_template | llm
-                        response = chain.invoke({"context": context_text, "question": prompt})
-                    except Exception:
-                        # Fallback seguro
-                        llm = ChatGoogleGenerativeAI(model="gemini-pro", temperature=0.1, google_api_key=google_key)
-                        chain = prompt_template | llm
-                        response = chain.invoke({"context": context_text, "question": prompt})
-
-                    response_text = response.content + f"\n\n\n*Fontes: {', '.join(sources)}*"
+                    # 3. Modelo Google (Configuração Simplificada)
+                    # Usamos 'gemini-1.5-flash'. Se este modelo der erro 404 futuramente,
+                    # basta trocar o texto abaixo para 'gemini-pro'.
+                    llm = ChatGoogleGenerativeAI(
+                        model="gemini-1.5-flash", 
+                        temperature=0.1
+                    )
+                    
+                    chain = prompt_template | llm
+                    response = chain.invoke({"context": context_text, "question": prompt})
+                    response_text = response.content
                 
                 st.markdown(response_text)
                 st.session_state.messages.append({"role": "assistant", "content": response_text})
             
             except Exception as e:
-                st.error(f"Erro: {e}")
+                st.error(f"Ocorreu um erro: {e}")
