@@ -3,4 +3,5 @@ langchain-google-genai
 langchain-pinecone
 pinecone
 langchain-huggingface
+sentence-transformers
 python-dotenv
