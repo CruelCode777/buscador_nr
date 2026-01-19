@@ -6,7 +6,7 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_google_genai import ChatGoogleGenerativeAI
 
 # Configuração da Página
-st.set_page_config(page_title="IA de Segurança do Trabalho", page_icon="👷", layout="centered")
+st.set_page_config(page_title="IA de Segurança do Trabalho", page_icon="👷", layout="wide")
 
 # --- SEGREDOS ---
 gemini_key = st.secrets["GEMINI_API_KEY"]
@@ -52,22 +52,41 @@ if prompt := st.chat_input("Ex: Quais os exames obrigatórios para trabalho em a
     with st.chat_message("assistant"):
         with st.spinner("Consultando a base unificada de normas..."):
             try:
-                # 1. Busca os trechos mais relevantes no Pinecone (k=10 para mais resultados)
+                # Busca mais documentos (k=10)
                 retriever = vectorstore.as_retriever(search_kwargs={"k": 10})
                 docs = retriever.invoke(prompt)
 
-                # DEBUG: mostrar docs encontrados (remova depois que testar)
-                st.write("**🔍 DEBUG - Docs encontrados para sua query:**")
-                for i, doc in enumerate(docs):
-                    src = doc.metadata.get("source", "sem fonte")
-                    st.write(f"**{i+1}**: `{src}`")
-                    st.write(f"**Conteúdo**: {doc.page_content[:200]}...")
-                    st.write("---")
-
                 if not docs:
-                    response_text = "Não encontrei informações sobre isso na base de dados das NRs."
+                    st.error("❌ Não encontrei informações sobre isso na base de dados das NRs.")
                 else:
-                    # Formata o contexto
+                    # 1. MOSTRAR DOCUMENTOS RELEVANTES (expanders + download)
+                    st.subheader("📚 **Documentos Relevantes Encontrados**")
+                    
+                    for i, doc in enumerate(docs):
+                        src = doc.metadata.get("source", "Desconhecido")
+                        
+                        # Extrair nome do arquivo limpo
+                        nome_arquivo = os.path.basename(src) if src != "Desconhecido" else "documento"
+                        
+                        with st.expander(f"📄 **{i+1}. {nome_arquivo}**", expanded=False):
+                            st.write("**Trecho da norma:**")
+                            st.markdown(f"```{doc.page_content[:800]}...```")
+                            
+                            # Botão para baixar PDF (se tiver pasta pdfs/)
+                            if src.startswith("pdfs/") and os.path.exists(src):
+                                with open(src, "rb") as pdf_file:
+                                    st.download_button(
+                                        label="📥 Abrir/Baixar PDF",
+                                        data=pdf_file.read(),
+                                        file_name=nome_arquivo,
+                                        mime="application/pdf"
+                                    )
+                            else:
+                                st.info("💡 PDF não disponível para download")
+
+                    # 2. GERAR RESPOSTA DA IA
+                    st.subheader("🤖 **Resposta do Consultor**")
+                    
                     context_text = ""
                     sources = set()
                     for doc in docs:
@@ -75,7 +94,6 @@ if prompt := st.chat_input("Ex: Quais os exames obrigatórios para trabalho em a
                         context_text += f"{doc.page_content}\n(Fonte: {src})\n---\n"
                         sources.add(src)
 
-                    # 2. O Prompt
                     system_prompt = """
                     Você é um Consultor Sênior em Segurança do Trabalho (HSE).
                     Sua missão é orientar profissionais com base estrita nas Normas Regulamentadoras (NRs).
@@ -92,8 +110,6 @@ if prompt := st.chat_input("Ex: Quais os exames obrigatórios para trabalho em a
                     """
 
                     prompt_template = ChatPromptTemplate.from_template(system_prompt)
-
-                    # 3. Chama a IA (Gemini)
                     llm = ChatGoogleGenerativeAI(
                         model="gemini-2.5-flash",
                         temperature=0.1,
@@ -110,10 +126,10 @@ if prompt := st.chat_input("Ex: Quais os exames obrigatórios para trabalho em a
                         + f"\n\n\n*Fontes consultadas: {', '.join(sources)}*"
                     )
 
-                st.markdown(response_text)
-                st.session_state.messages.append(
-                    {"role": "assistant", "content": response_text}
-                )
+                    st.markdown(response_text)
+                    st.session_state.messages.append(
+                        {"role": "assistant", "content": response_text}
+                    )
 
             except Exception as e:
                 st.error(f"Ocorreu um erro durante a resposta: {e}")
