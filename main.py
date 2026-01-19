@@ -52,7 +52,7 @@ if prompt := st.chat_input("Ex: Quais os exames obrigatórios para trabalho em a
         with st.spinner("Consultando a base unificada de normas..."):
             try:
                 # Busca mais documentos para melhor cobertura
-                retriever = vectorstore.as_retriever(search_kwargs={"k": 8})
+                retriever = vectorstore.as_retriever(search_kwargs={"k": 10})
                 docs = retriever.invoke(prompt)
                 
                 if not docs:
