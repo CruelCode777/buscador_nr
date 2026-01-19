@@ -3,18 +3,15 @@ import os
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_pinecone import PineconeVectorStore
 from langchain_core.prompts import ChatPromptTemplate
-from langchain_google_genai import ChatGoogleGenerativeAI  # <--- Gemini via LangChain [web:13]
+from langchain_google_genai import ChatGoogleGenerativeAI
 
 # Configuração da Página
 st.set_page_config(page_title="IA de Segurança do Trabalho", page_icon="👷", layout="centered")
 
 # --- SEGREDOS ---
-# Adicione no .streamlit/secrets.toml:
-# GEMINI_API_KEY = "sua-chave-aqui"
 gemini_key = st.secrets["GEMINI_API_KEY"]
-
-# Opcional: setar também como variável de ambiente (algumas libs usam isso)
 os.environ["GOOGLE_API_KEY"] = gemini_key
+os.environ["PINECONE_API_KEY"] = st.secrets["PINECONE_API_KEY"]
 
 st.title("👷 Consultor de NRs (IA)")
 st.caption("Base de conhecimento unificada de todas as Normas Regulamentadoras.")
@@ -22,12 +19,9 @@ st.caption("Base de conhecimento unificada de todas as Normas Regulamentadoras."
 # --- CONEXÃO COM A BASE DE DADOS (PINECONE) ---
 @st.cache_resource
 def get_knowledge_base():
-    os.environ["PINECONE_API_KEY"] = st.secrets["PINECONE_API_KEY"]
-
     embeddings = HuggingFaceEmbeddings(
         model_name="sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
     )
-
     vectorstore = PineconeVectorStore.from_existing_index(
         index_name="base-nrs",
         embedding=embeddings,
@@ -56,19 +50,19 @@ if prompt := st.chat_input("Ex: Quais os exames obrigatórios para trabalho em a
         st.markdown(prompt)
 
     with st.chat_message("assistant"):
-    with st.spinner("Consultando a base unificada de normas..."):
-        try:
-            # 1. Busca os trechos mais relevantes no Pinecone
-            retriever = vectorstore.as_retriever(search_kwargs={"k": 10})  # ← AQUI: aumentado
-            docs = retriever.invoke(prompt)
-            
-            # DEBUG: mostrar o que foi encontrado ← AQUI: adicione para testar
-            st.write("**DEBUG - Docs encontrados para sua query:**")
-            for i, doc in enumerate(docs):
-                st.write(f"**{i+1}**: {doc.metadata.get('source', 'sem fonte')}")
-                st.write(f"Conteúdo: {doc.page_content[:150]}...")
-                st.write("---")
+        with st.spinner("Consultando a base unificada de normas..."):
+            try:
+                # 1. Busca os trechos mais relevantes no Pinecone (k=10 para mais resultados)
+                retriever = vectorstore.as_retriever(search_kwargs={"k": 10})
+                docs = retriever.invoke(prompt)
 
+                # DEBUG: mostrar docs encontrados (remova depois que testar)
+                st.write("**🔍 DEBUG - Docs encontrados para sua query:**")
+                for i, doc in enumerate(docs):
+                    src = doc.metadata.get("source", "sem fonte")
+                    st.write(f"**{i+1}**: `{src}`")
+                    st.write(f"**Conteúdo**: {doc.page_content[:200]}...")
+                    st.write("---")
 
                 if not docs:
                     response_text = "Não encontrei informações sobre isso na base de dados das NRs."
@@ -101,18 +95,16 @@ if prompt := st.chat_input("Ex: Quais os exames obrigatórios para trabalho em a
 
                     # 3. Chama a IA (Gemini)
                     llm = ChatGoogleGenerativeAI(
-                        model="gemini-2.5-flash",  # ou outro modelo disponível [web:13]
+                        model="gemini-2.5-flash",
                         temperature=0.1,
                         google_api_key=gemini_key,
                     )
-
                     chain = prompt_template | llm
 
                     response = chain.invoke(
                         {"context": context_text, "question": prompt}
                     )
 
-                    # Em ChatGoogleGenerativeAI, o conteúdo vem em response.content
                     response_text = (
                         response.content
                         + f"\n\n\n*Fontes consultadas: {', '.join(sources)}*"
