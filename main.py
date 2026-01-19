@@ -1,16 +1,20 @@
 import streamlit as st
-import os  # <--- Importante adicionar isso
-from langchain_groq import ChatGroq
+import os
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_pinecone import PineconeVectorStore
 from langchain_core.prompts import ChatPromptTemplate
+from langchain_google_genai import ChatGoogleGenerativeAI  # <--- Gemini via LangChain [web:13]
 
 # Configuração da Página
 st.set_page_config(page_title="IA de Segurança do Trabalho", page_icon="👷", layout="centered")
 
 # --- SEGREDOS ---
-groq_key = st.secrets["GROQ_API_KEY"]
-pinecone_key = st.secrets["PINECONE_API_KEY"]
+# Adicione no .streamlit/secrets.toml:
+# GEMINI_API_KEY = "sua-chave-aqui"
+gemini_key = st.secrets["GEMINI_API_KEY"]
+
+# Opcional: setar também como variável de ambiente (algumas libs usam isso)
+os.environ["GOOGLE_API_KEY"] = gemini_key
 
 st.title("👷 Consultor de NRs (IA)")
 st.caption("Base de conhecimento unificada de todas as Normas Regulamentadoras.")
@@ -18,15 +22,15 @@ st.caption("Base de conhecimento unificada de todas as Normas Regulamentadoras."
 # --- CONEXÃO COM A BASE DE DADOS (PINECONE) ---
 @st.cache_resource
 def get_knowledge_base():
-    # Define a chave no ambiente (é assim que a nova biblioteca procura)
-    os.environ['PINECONE_API_KEY'] = pinecone_key 
+    os.environ["PINECONE_API_KEY"] = st.secrets["PINECONE_API_KEY"]
 
-    embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
-    
-    # Conecta ao índice (agora sem passar a chave explicitamente aqui dentro)
+    embeddings = HuggingFaceEmbeddings(
+        model_name="sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+    )
+
     vectorstore = PineconeVectorStore.from_existing_index(
         index_name="base-nrs",
-        embedding=embeddings
+        embedding=embeddings,
     )
     return vectorstore
 
@@ -53,12 +57,11 @@ if prompt := st.chat_input("Ex: Quais os exames obrigatórios para trabalho em a
 
     with st.chat_message("assistant"):
         with st.spinner("Consultando a base unificada de normas..."):
-            
             try:
                 # 1. Busca os trechos mais relevantes no Pinecone
                 retriever = vectorstore.as_retriever(search_kwargs={"k": 4})
                 docs = retriever.invoke(prompt)
-                
+
                 if not docs:
                     response_text = "Não encontrei informações sobre isso na base de dados das NRs."
                 else:
@@ -66,8 +69,7 @@ if prompt := st.chat_input("Ex: Quais os exames obrigatórios para trabalho em a
                     context_text = ""
                     sources = set()
                     for doc in docs:
-                        # Proteção caso o metadado 'source' esteja vazio
-                        src = doc.metadata.get('source', 'Desconhecido')
+                        src = doc.metadata.get("source", "Desconhecido")
                         context_text += f"{doc.page_content}\n(Fonte: {src})\n---\n"
                         sources.add(src)
 
@@ -86,19 +88,32 @@ if prompt := st.chat_input("Ex: Quais os exames obrigatórios para trabalho em a
                     
                     Pergunta do Usuário: {question}
                     """
-                    
+
                     prompt_template = ChatPromptTemplate.from_template(system_prompt)
-                    
-                    # 3. Chama a IA (Groq) - Usando modelo estável
-                    llm = ChatGroq(temperature=0.1, model_name="llama-3.3-70b-versatile", groq_api_key=groq_key)
+
+                    # 3. Chama a IA (Gemini)
+                    llm = ChatGoogleGenerativeAI(
+                        model="gemini-2.5-flash",  # ou outro modelo disponível [web:13]
+                        temperature=0.1,
+                        google_api_key=gemini_key,
+                    )
+
                     chain = prompt_template | llm
-                    
-                    response = chain.invoke({"context": context_text, "question": prompt})
-                    
-                    response_text = response.content + f"\n\n\n*Fontes consultadas: {', '.join(sources)}*"
-                
+
+                    response = chain.invoke(
+                        {"context": context_text, "question": prompt}
+                    )
+
+                    # Em ChatGoogleGenerativeAI, o conteúdo vem em response.content
+                    response_text = (
+                        response.content
+                        + f"\n\n\n*Fontes consultadas: {', '.join(sources)}*"
+                    )
+
                 st.markdown(response_text)
-                st.session_state.messages.append({"role": "assistant", "content": response_text})
-            
+                st.session_state.messages.append(
+                    {"role": "assistant", "content": response_text}
+                )
+
             except Exception as e:
                 st.error(f"Ocorreu um erro durante a resposta: {e}")
