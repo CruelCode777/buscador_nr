@@ -7,7 +7,7 @@ from pinecone import Pinecone
 
 # --- CONFIGURAÇÃO ---
 # Cole sua chave do Pinecone aqui dentro das aspas!
-PINECONE_KEY = "COLE A SUA AQUI" 
+PINECONE_KEY = "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" 
 
 INDEX_NAME = "base-nrs"
 PASTA_PDFS = "pdfs"
@@ -56,3 +56,4 @@ def carregar_tudo():
 if __name__ == "__main__":
 
     carregar_tudo()
+
