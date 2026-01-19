@@ -6,3 +6,5 @@ langchain-pinecone
 pinecone
 sentence-transformers
 python-dotenv
+langchain-google-genai
+google-genai
